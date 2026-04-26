@@ -1,124 +1,107 @@
 # poly_bot
 
-A **safe, public-repo friendly scaffold** for monitoring and paper-trading BTC 5-minute direction ideas.
+A safe scaffold for monitoring and paper-trading BTC 5-minute direction ideas.
 
-This repository is intentionally **non-executing** for live orders. It is designed to help you:
+This repository is intentionally non-executing for live orders. It helps you:
 
 - run on GitHub Actions every 5 minutes
 - store sensitive values in GitHub Secrets
 - mask sensitive values in logs
 - compute a simple UP / DOWN / SKIP signal
-- save a decision artifact for review
+- save local artifacts that show what the bot would do
 
-## What is considered sensitive
+## Sensitive values
 
-These values should **never** be committed to the repo:
+Never commit these values to the repo:
 
 - API keys
-- API secrets / passphrases
-- private keys / seed phrases / wallet signing material
+- API secrets or passphrases
+- private keys or seed phrases
 - webhook URLs with auth tokens
-- account identifiers that could be abused together with other secrets
+- account identifiers that become risky when combined with other secrets
 
-This repo demonstrates how to **dummy** or **mask** them.
-
-## Dummy secret names
-
-Configure these in **GitHub Settings -> Secrets and variables -> Actions**.
-
-- `POLYMARKET_API_KEY`
-- `POLYMARKET_SECRET`
-- `POLYMARKET_PASSPHRASE`
-- `POLYMARKET_PROXY_WALLET`
-- `POLYMARKET_FUNDER`
-- `ALERT_WEBHOOK_URL`
-
-You can initially put dummy values such as:
+## Files added for local use
 
 ```text
-POLYMARKET_API_KEY=dummy_api_key_123456
-POLYMARKET_SECRET=dummy_secret_abcdef
-POLYMARKET_PASSPHRASE=dummy_passphrase
-POLYMARKET_PROXY_WALLET=0x0000000000000000000000000000000000000000
-POLYMARKET_FUNDER=0x0000000000000000000000000000000000000000
-ALERT_WEBHOOK_URL=https://example.com/webhook/dummy
+.env.example                 Local environment template
+Makefile                     Local setup / test / run commands
+src/bot/config.py            Environment loading
+src/bot/redact.py            Secret masking helpers
+src/bot/signal.py            Simple direction signal logic
+src/bot/intent.py            Paper order intent generator
+src/bot/state.py             State snapshot writer
+src/bot/main.py              Main local entry point
+tests/test_signal.py         Basic tests
 ```
 
-## What gets masked
+## Local setup
 
-The code registers GitHub Actions mask commands for the sensitive values it sees, and also produces a redacted config snapshot.
-
-Example:
-
-```text
-POLYMARKET_API_KEY -> dum...456
-POLYMARKET_SECRET -> dum...def
-ALERT_WEBHOOK_URL -> htt...mmy
-```
-
-## Repository layout
-
-```text
-.github/workflows/paper-bot.yml   Scheduled workflow
-src/bot/config.py                 Environment loading
-src/bot/redact.py                 Secret masking helpers
-src/bot/signal.py                 Simple direction signal logic
-src/bot/main.py                   Entry point for dry-run decisions
-tests/test_signal.py              Basic tests
-```
-
-## How it works
-
-The workflow runs every 5 minutes or can be triggered manually.
-
-The script:
-
-1. loads env vars and GitHub Secrets
-2. masks sensitive values for logs
-3. reads `ANCHOR_PRICE` and `CURRENT_PRICE`
-4. computes a signal: `UP`, `DOWN`, or `SKIP`
-5. writes a JSON artifact to `out/decision.json`
-
-No live order placement is implemented in this repo.
-
-## Manual workflow inputs
-
-The workflow supports manual inputs:
-
-- `anchor_price`
-- `current_price`
-- `threshold_bps`
-
-This makes it easy to test without any external API.
-
-## Local run
+Clone the repo, create a virtual environment, and install dependencies:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export ANCHOR_PRICE=100000
-export CURRENT_PRICE=100150
-export SIGNAL_THRESHOLD_BPS=5
-PYTHONPATH=src python -m bot.main
+git clone https://github.com/yt-feng/poly_bot.git
+cd poly_bot
+make setup
 ```
+
+Create your local env file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and keep `DRY_RUN=true`. The placeholders in `.env.example` are there so you can see which fields are sensitive.
+
+Run tests:
+
+```bash
+make test
+```
+
+Run the local paper bot:
+
+```bash
+make run
+```
+
+## What local run produces
+
+A local run writes three files into `out/`:
+
+- `decision.json` — redacted config plus signal result
+- `order_intent.json` — what the bot would do in paper mode
+- `state.json` — last run snapshot with timestamp
+
+## Example signal behavior
+
+Inputs:
+
+- `ANCHOR_PRICE=100000`
+- `CURRENT_PRICE=100050`
+- `SIGNAL_THRESHOLD_BPS=5`
+
+Output:
+
+- move = +5 bps
+- signal = `UP`
+- order intent = `would_buy_up`
+
+## GitHub Actions mode
+
+The workflow runs every 5 minutes or can be triggered manually. It reads the same environment shape as local mode and uploads `out/decision.json` as an artifact.
 
 ## Public repo safety notes
 
-A public repo can still use GitHub Secrets safely **only if** you keep these habits:
+A public repo can still use GitHub Secrets safely only if you:
 
 - never print raw secrets
 - do not commit `.env`
 - keep workflow permissions minimal
 - review third-party actions carefully
-- prefer pinning actions to a commit SHA later if you keep real secrets
 
-## Next safe extension ideas
+## Limit of this scaffold
 
-- add market data fetchers without execution
-- add Slack / webhook alerts
-- add state tracking between runs
-- add paper PnL tracking
+This project stops at signal generation and paper order intent. It does not place live orders.
 
 ## License
 
