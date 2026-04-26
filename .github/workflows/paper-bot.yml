@@ -1,0 +1,63 @@
+name: paper-bot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      anchor_price:
+        description: 'Reference BTC price for the 5-minute window'
+        required: false
+        default: '100000'
+      current_price:
+        description: 'Current BTC price for dry-run evaluation'
+        required: false
+        default: '100050'
+      threshold_bps:
+        description: 'Minimum move in basis points before signaling'
+        required: false
+        default: '5'
+
+permissions:
+  contents: read
+
+jobs:
+  paper-run:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+      DRY_RUN: 'true'
+      ANCHOR_PRICE: ${{ inputs.anchor_price || vars.ANCHOR_PRICE || '100000' }}
+      CURRENT_PRICE: ${{ inputs.current_price || vars.CURRENT_PRICE || '100050' }}
+      SIGNAL_THRESHOLD_BPS: ${{ inputs.threshold_bps || vars.SIGNAL_THRESHOLD_BPS || '5' }}
+      POLYMARKET_API_KEY: ${{ secrets.POLYMARKET_API_KEY }}
+      POLYMARKET_SECRET: ${{ secrets.POLYMARKET_SECRET }}
+      POLYMARKET_PASSPHRASE: ${{ secrets.POLYMARKET_PASSPHRASE }}
+      POLYMARKET_PROXY_WALLET: ${{ secrets.POLYMARKET_PROXY_WALLET }}
+      POLYMARKET_FUNDER: ${{ secrets.POLYMARKET_FUNDER }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Run dry-run paper bot
+        run: python -m bot.main
+
+      - name: Upload decision artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-bot-decision
+          path: out/decision.json
