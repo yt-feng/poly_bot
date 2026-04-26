@@ -5,8 +5,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .config import Config
+from .intent import build_order_intent
 from .redact import emit_github_mask_commands
 from .signal import compute_signal
+from .state import write_state
 
 
 def main() -> None:
@@ -37,11 +39,31 @@ def main() -> None:
 
     out_dir = Path("out")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "decision.json"
-    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    decision_path = out_dir / "decision.json"
+    decision_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    intent = build_order_intent(result)
+    intent_path = out_dir / "order_intent.json"
+    intent_path.write_text(json.dumps(intent, indent=2), encoding="utf-8")
+
+    state_path = write_state(
+        {
+            "mode": payload["mode"],
+            "signal": result.signal,
+            "anchor_price": result.anchor_price,
+            "current_price": result.current_price,
+            "threshold_bps": result.threshold_bps,
+            "move_bps": result.move_bps,
+        },
+        out_dir,
+    )
 
     print(json.dumps(payload, indent=2))
-    print(f"Saved decision artifact to {out_path}")
+    print(json.dumps(intent, indent=2))
+    print(f"Saved decision artifact to {decision_path}")
+    print(f"Saved order intent to {intent_path}")
+    print(f"Saved state snapshot to {state_path}")
 
 
 if __name__ == "__main__":
